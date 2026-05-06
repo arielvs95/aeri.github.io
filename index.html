@@ -1,0 +1,595 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  Search, MapPin, Home, Users, Calendar, 
+  ChevronLeft, Star, ShieldCheck, CheckCircle, 
+  XCircle, Loader2, Wind, ChefHat, Ban, UserCheck,
+  CreditCard, Briefcase, Clock, Info, Share2, 
+  ShieldAlert, Globe, MessageSquare, DollarSign,
+  Phone
+} from 'lucide-react';
+
+// --- DATA GENERATION ENGINE ---
+const LOCATIONS = [
+  { mrt: "Clementi (EW23)", postal: "120441" },
+  { mrt: "Paya Lebar (EW8/CC9)", postal: "409054" },
+  { mrt: "Jurong East (EW24/NS1)", postal: "600201" },
+  { mrt: "Woodleigh (NE11)", postal: "357691" },
+  { mrt: "Ang Mo Kio (NS16)", postal: "560424" },
+  { mrt: "Tanjong Pagar (EW15)", postal: "079903" },
+  { mrt: "Tampines (EW2/DT32)", postal: "520123" },
+  { mrt: "Farrer Park (NE8)", postal: "217562" },
+  { mrt: "Bishan (NS17/CC15)", postal: "579837" },
+  { mrt: "Sengkang (NE16)", postal: "545011" },
+  { mrt: "Yishun (NS13)", postal: "760701" },
+  { mrt: "Bedok (EW5)", postal: "460212" }
+];
+
+// Curated for "Phone Photo" aesthetic: Natural lighting, realistic clutter, standard furniture
+const ROOM_IMAGES = [
+  "https://images.unsplash.com/photo-1556020685-ae41abfc9365?q=80&w=1000", // Simple wooden floor, plain bed
+  "https://images.unsplash.com/photo-1540518614846-7eded433c457?q=80&w=1000", // Standard room with desk
+  "https://images.unsplash.com/photo-1560185007-5f0bb1866cab?q=80&w=1000", // Realistic window and wall
+  "https://images.unsplash.com/photo-1594488630399-bf71f3353e97?q=80&w=1000", // Basic single room
+  "https://images.unsplash.com/photo-1595526114035-0d45ed16cfbf?q=80&w=1000", // Standard HDB-style floor
+  "https://images.unsplash.com/photo-1631679706909-1844bbd07221?q=80&w=1000", // "Messy" look, real furniture
+  "https://images.unsplash.com/photo-1598928506311-c55ded91a20c?q=80&w=1000", // Phone-quality lighting
+  "https://images.unsplash.com/photo-1512918766671-ed6a9980a659?q=80&w=1000", // Authentic apartment corner
+  "https://images.unsplash.com/photo-1560448204-61dc36dc98c8?q=80&w=1000", // Basic shelving and bed
+  "https://images.unsplash.com/photo-1499916078039-922301b0eb9b?q=80&w=1000", // Older style common room
+  "https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=1000", // Natural window glare
+  "https://images.unsplash.com/photo-1522771739844-6a9f6d5f14af?q=80&w=1000"  // The "Real Home" look
+];
+
+const LANDLORDS = ["Mr. Tan", "Ms. Lim", "Madam Lee", "Mr. Wong", "Property Guru SG", "Habyt Management", "Cove Living", "Auntie Mary", "Uncle Koh"];
+
+const REVIEW_TEMPLATES = [
+  "The room is very clean and exactly like the photos. The landlord is friendly and respects privacy.",
+  "Super convenient location! Just a 5-minute walk to the MRT. The other housemates are quiet and professional.",
+  "I stayed here for 6 months. Great experience, the air-con is cold and the wifi is very fast.",
+  "Quiet environment, perfect for working from home. The kitchen is well-equipped for light cooking.",
+  "Very smooth check-in process. The house rules are reasonable and keep the place very tidy.",
+  "High floor with a great breeze. I rarely needed the air-con. Landlord was very responsive to maintenance requests.",
+  "Cozy room with plenty of storage. The common area is cleaned weekly which is a huge plus.",
+  "Best rental experience in SG so far. Safe neighborhood and lots of food options nearby.",
+  "The master room is spacious and the en-suite bathroom is very well-maintained.",
+  "Good value for money. The utility bill is usually quite low despite regular air-con use."
+];
+
+// Generate 180 realistic listings
+const LISTINGS = Array.from({ length: 180 }, (_, i) => {
+  const loc = LOCATIONS[i % LOCATIONS.length];
+  const houseType = i % 5 === 0 ? "Condo" : "HDB";
+  const roomType = i % 6 === 0 ? "Master Room" : (i % 3 === 0 ? "Shared" : "Single");
+  const genderPref = i % 7 === 0 ? "Female Only" : (i % 9 === 0 ? "Male Only" : "Mixed");
+  const paxAllowed = (roomType === "Master Room" || roomType === "Shared") ? 2 : 1;
+  const rentalType = i % 8 === 0 ? "Short-term" : "Long-term";
+  
+  let price;
+  if (roomType === "Shared") {
+    price = 450 + (i % 300);
+  } else if (houseType === "HDB") {
+    price = roomType === "Master Room" ? 1100 + (i % 400) : 650 + (i % 400);
+  } else {
+    price = roomType === "Master Room" ? 2200 + (i * 10 % 1300) : 1500 + (i * 5 % 800);
+  }
+
+  // Generate 2-3 unique reviews per listing
+  const reviews = Array.from({ length: 2 + (i % 2) }, (_, ri) => {
+    return REVIEW_TEMPLATES[(i + ri * 3) % REVIEW_TEMPLATES.length];
+  });
+  
+  return {
+    id: i + 1,
+    title: `${roomType} for rent near ${loc.mrt}`,
+    price,
+    genderPref,
+    moveIn: "Immediate",
+    image: ROOM_IMAGES[i % ROOM_IMAGES.length],
+    roomType,
+    houseType,
+    mrt: loc.mrt,
+    postal: loc.postal,
+    pax: paxAllowed,
+    rentalType: rentalType,
+    landlord: LANDLORDS[i % LANDLORDS.length],
+    contact: `+65 ${8000 + i} 5521`,
+    rules: {
+      ac: i % 3 === 0 ? "Max 8 hours daily." : "Max 10 hours (usually night).",
+      guests: i % 4 === 0 ? "Strictly no guests." : "No overnight guests.",
+      cooking: i % 2 === 0 ? "Light boiling only." : "No heavy frying.",
+      others: "Non-smokers preferred. Keep shared toilets clean."
+    },
+    rating: (3.8 + Math.random() * 1.2).toFixed(1),
+    reviewCount: reviews.length + Math.floor(Math.random() * 20),
+    reviews: reviews,
+    preferredPass: i % 5 === 0 ? ["Employment Pass", "S Pass"] : (i % 7 === 0 ? ["Student Pass"] : ["Any"]),
+    nationalityPref: i % 12 === 0 ? ["Singaporean", "PR"] : ["Any"]
+  };
+});
+
+// --- MAIN APP COMPONENT ---
+export default function App() {
+  const [view, setView] = useState('home');
+  const [selectedListing, setSelectedListing] = useState(null);
+  const [filters, setFilters] = useState({
+    location: '', gender: '', roomType: '', houseType: '', priceRange: '', pax: '', duration: ''
+  });
+
+  const navigateHome = () => { setView('home'); setSelectedListing(null); window.scrollTo(0,0); };
+
+  return (
+    <div className="min-h-screen bg-[#F8FAFC] text-[#1E293B] font-sans">
+      {/* Header */}
+      <header className="bg-white border-b border-slate-200 sticky top-0 z-50 h-16 flex items-center shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 w-full flex justify-between items-center">
+          <div className="flex items-center gap-2 cursor-pointer" onClick={navigateHome}>
+            <div className="bg-indigo-600 p-2 rounded-lg"><Home className="text-white w-5 h-5" /></div>
+            <div className="flex flex-col leading-tight">
+                <span className="text-lg font-black tracking-tight">PassRent<span className="text-indigo-600">SG</span></span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Verified Rentals</span>
+            </div>
+          </div>
+          <div className="flex gap-4 items-center">
+            <button className="text-xs font-bold text-slate-500 hover:text-indigo-600 hidden sm:block">LIST PROPERTY</button>
+            <div className="h-4 w-[1px] bg-slate-200 hidden sm:block"></div>
+            <button className="bg-indigo-600 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition">LOG IN</button>
+          </div>
+        </div>
+      </header>
+
+      {view === 'home' && (
+        <HomePage filters={filters} setFilters={setFilters} onSelect={(l) => { setSelectedListing(l); setView('details'); window.scrollTo(0,0); }} />
+      )}
+      
+      {view === 'details' && selectedListing && (
+        <DetailsPage listing={selectedListing} onBack={navigateHome} onApply={() => setView('apply')} />
+      )}
+
+      {view === 'apply' && selectedListing && (
+        <ApplyPage listing={selectedListing} onBack={() => setView('details')} />
+      )}
+    </div>
+  );
+}
+
+// --- SUB-PAGES ---
+function HomePage({ filters, setFilters, onSelect }) {
+  const filteredListings = useMemo(() => {
+    return LISTINGS.filter(l => {
+      if (filters.location && !l.mrt.toLowerCase().includes(filters.location.toLowerCase())) return false;
+      if (filters.gender && l.genderPref !== filters.gender && l.genderPref !== 'Mixed') return false;
+      if (filters.roomType && l.roomType !== filters.roomType) return false;
+      if (filters.houseType && l.houseType !== filters.houseType) return false;
+      if (filters.pax && l.pax !== parseInt(filters.pax)) return false;
+      if (filters.duration && l.rentalType !== filters.duration) return false;
+      
+      if (filters.priceRange) {
+        const [min, max] = filters.priceRange.split('-').map(Number);
+        if (max) {
+          if (l.price < min || l.price > max) return false;
+        } else {
+          if (l.price < min) return false;
+        }
+      }
+      return true;
+    });
+  }, [filters]);
+
+  return (
+    <div className="pb-20">
+      <div className="bg-slate-900 py-16 px-4">
+        <div className="max-w-4xl mx-auto text-center mb-10">
+            <h1 className="text-white text-3xl md:text-5xl font-black mb-4 leading-tight">Find Your Next Home in Singapore</h1>
+            <p className="text-slate-400 max-w-xl mx-auto text-sm md:text-base">Browse affordable rooms and premium housing directly from landlords.</p>
+        </div>
+        
+        {/* Search & Filter Bar */}
+        <div className="max-w-6xl mx-auto bg-white p-3 rounded-2xl shadow-2xl grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
+          <div className="flex items-center px-3 bg-slate-50 rounded-xl border border-slate-100 col-span-2 lg:col-span-1">
+            <Search className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
+            <input 
+              placeholder="MRT station..." 
+              className="bg-transparent text-[11px] font-bold py-2 outline-none w-full"
+              value={filters.location}
+              onChange={(e) => setFilters({...filters, location: e.target.value})}
+            />
+          </div>
+          <FilterSelect value={filters.priceRange} label="Price" options={["0-700", "701-1200", "1201-2000", "2001-5000"]} onChange={(v) => setFilters({...filters, priceRange: v})} />
+          <FilterSelect value={filters.gender} label="Gender" options={["Male Only", "Female Only", "Mixed"]} onChange={(v) => setFilters({...filters, gender: v})} />
+          <FilterSelect value={filters.roomType} label="Room" options={["Single", "Shared", "Master Room"]} onChange={(v) => setFilters({...filters, roomType: v})} />
+          <FilterSelect value={filters.houseType} label="House" options={["HDB", "Condo"]} onChange={(v) => setFilters({...filters, houseType: v})} />
+          <FilterSelect value={filters.pax} label="Pax" options={["1", "2"]} onChange={(v) => setFilters({...filters, pax: v})} />
+          <FilterSelect value={filters.duration} label="Term" options={["Short-term", "Long-term"]} onChange={(v) => setFilters({...filters, duration: v})} />
+          <button className="bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-wider hover:bg-indigo-700 transition" onClick={() => setFilters({location: '', gender: '', roomType: '', houseType: '', priceRange: '', pax: '', duration: ''})}>Reset</button>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 mt-10">
+        <div className="flex justify-between items-center mb-8">
+            <div>
+                <h2 className="text-2xl font-black">Available Listings</h2>
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">{filteredListings.length} results found</p>
+            </div>
+            <div className="flex gap-2">
+                <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm">
+                    <Globe className="w-3 h-3" /> Foreigner Friendly
+                </div>
+            </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredListings.map(l => (
+            <div key={l.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden hover:shadow-xl transition-all cursor-pointer group flex flex-col" onClick={() => onSelect(l)}>
+              <div className="h-44 relative overflow-hidden">
+                <img src={l.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={l.title} />
+                <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                  <span className={`${l.price < 850 ? 'bg-emerald-500' : 'bg-slate-900/80'} backdrop-blur text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-md`}>
+                    {l.price < 850 ? 'Budget Deal' : l.houseType}
+                  </span>
+                  <span className="bg-indigo-600/90 backdrop-blur text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider shadow-md w-fit">{l.rentalType}</span>
+                </div>
+              </div>
+              <div className="p-5 flex-1 flex flex-col">
+                <div className="flex justify-between items-start mb-3">
+                  <h3 className="font-bold text-sm leading-snug line-clamp-2 flex-1 pr-2">{l.title}</h3>
+                  <div className="flex items-center text-amber-500 text-xs font-black bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
+                    <Star className="w-3 h-3 fill-current mr-0.5" /> {l.rating}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2 mb-4">
+                  <Tag icon={UserCheck} label={l.genderPref} />
+                  <Tag icon={Users} label={`${l.pax} Pax Max`} />
+                  <Tag icon={Calendar} label={l.moveIn} />
+                  <Tag icon={Home} label={l.roomType} />
+                </div>
+
+                <div className="mt-auto pt-4 border-t border-slate-50 flex items-center justify-between">
+                  <div className="flex items-center text-slate-400 text-[10px] font-bold"><MapPin className="w-3 h-3 mr-1" /> {l.mrt.split('(')[0]}</div>
+                  <div className={`text-xl font-black ${l.price < 850 ? 'text-emerald-600' : 'text-indigo-600'}`}>
+                    ${l.price}<span className="text-[10px] text-slate-400 font-normal"> /mo</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DetailsPage({ listing, onBack, onApply }) {
+  return (
+    <div className="max-w-6xl mx-auto px-4 py-8">
+      <button onClick={onBack} className="flex items-center text-slate-400 font-black text-[10px] uppercase tracking-widest mb-6 hover:text-indigo-600 transition"><ChevronLeft className="w-4 h-4 mr-1" /> Back to Search</button>
+      
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-6">
+          <div className="rounded-3xl overflow-hidden h-[450px] shadow-2xl relative">
+            <img src={listing.image} className="w-full h-full object-cover" alt="Interior" />
+            <div className="absolute bottom-6 left-6 bg-white/90 backdrop-blur p-4 rounded-2xl shadow-xl flex items-center gap-3 border border-white/50">
+                <div className="bg-indigo-600 text-white p-2 rounded-lg"><MapPin className="w-5 h-5" /></div>
+                <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Nearest Station</p>
+                    <p className="text-sm font-black">{listing.mrt}</p>
+                </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-8 rounded-3xl border border-slate-200 shadow-sm space-y-8">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-indigo-100">{listing.houseType}</span>
+                  <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border border-emerald-100">{listing.roomType}</span>
+                </div>
+                <h1 className="text-3xl font-black text-slate-900">{listing.title}</h1>
+                <div className="flex items-center text-slate-500 mt-2 font-medium"><MapPin className="w-4 h-4 mr-2" /> Postal Code: {listing.postal}</div>
+              </div>
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 min-w-[140px] text-center">
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Monthly Rent</p>
+                 <p className="text-2xl font-black text-indigo-600">${listing.price}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
+              <Spec icon={Users} label="Occupancy" val={`${listing.pax} Pax`} />
+              <Spec icon={Clock} label="Rental Type" val={listing.rentalType} />
+              <Spec icon={Calendar} label="Move-In" val={listing.moveIn} />
+              <Spec icon={ShieldCheck} label="Verification" val="AI Verified" />
+            </div>
+
+            <div className="pt-8 border-t border-slate-100">
+              <h3 className="text-lg font-black mb-6 flex items-center"><Info className="w-5 h-5 mr-2 text-indigo-600" /> House Rules & Policies</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <RuleItem icon={Wind} label="Air-Con Usage" val={listing.rules.ac} />
+                <RuleItem icon={Users} label="Guest Policy" val={listing.rules.guests} />
+                <RuleItem icon={ChefHat} label="Cooking Preference" val={listing.rules.cooking} />
+                <RuleItem icon={Ban} label="Other Rules" val={listing.rules.others} />
+              </div>
+            </div>
+
+            <div className="p-5 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
+              <div className="bg-amber-100 p-3 rounded-xl self-start"><ShieldAlert className="w-6 h-6 text-amber-600" /></div>
+              <div>
+                <p className="text-sm font-black text-amber-900 mb-1">Mandatory Rental Notice & Deposit</p>
+                <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                    For long-term rentals (6 months+), a **one-month security deposit** is required upon signing. 
+                    Tenants must provide at least **one-month written notice** before vacating. 
+                    Short-term rentals may have different deposit terms.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-8 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-black">Tenant Reviews ({listing.reviewCount})</h3>
+                <div className="flex items-center text-amber-500 font-black"><Star className="w-4 h-4 fill-current mr-1" /> {listing.rating} Avg</div>
+              </div>
+              <div className="grid gap-4">
+                {listing.reviews.map((rev, idx) => (
+                  <div key={idx} className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="flex justify-between items-center mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-black">{idx === 0 ? 'V' : 'T'}</div>
+                        <span className="font-bold text-sm">Verified Tenant</span>
+                      </div>
+                      <div className="flex text-amber-400"><Star className="w-3 h-3 fill-current" /><Star className="w-3 h-3 fill-current" /><Star className="w-3 h-3 fill-current" /><Star className="w-3 h-3 fill-current" /><Star className="w-3 h-3 fill-current" /></div>
+                    </div>
+                    <p className="text-sm text-slate-600 leading-relaxed italic">"{rev}"</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xl sticky top-24">
+            <div className="flex items-center gap-3 mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <div className="w-12 h-12 bg-indigo-600 rounded-xl flex items-center justify-center text-white text-lg font-black uppercase">
+                    {listing.landlord.charAt(0)}
+                </div>
+                <div>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Property Owner</p>
+                    <p className="text-sm font-black">{listing.landlord}</p>
+                </div>
+            </div>
+            
+            <div className="space-y-4 mb-8">
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-slate-400 uppercase tracking-wider">Contact</span>
+                <span className="text-indigo-600">{listing.contact}</span>
+              </div>
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-slate-400 uppercase tracking-wider">Rating</span>
+                <span className="text-amber-500 flex items-center"><Star className="w-3 h-3 fill-current mr-1" /> 4.9/5</span>
+              </div>
+              <div className="flex items-center justify-between text-xs font-bold">
+                <span className="text-slate-400 uppercase tracking-wider">Response Time</span>
+                <span className="text-emerald-600">~15 mins</span>
+              </div>
+            </div>
+
+            <button onClick={onApply} className="w-full bg-indigo-600 text-white font-black py-4 rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all text-lg mb-4">Apply for Rental</button>
+            <p className="text-[9px] text-center text-slate-400 uppercase tracking-[0.2em] font-black">AI Screening Required</p>
+          </div>
+          
+          <div className="bg-indigo-50 p-6 rounded-3xl border border-indigo-100">
+              <h4 className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-3 flex items-center"><ShieldCheck className="w-4 h-4 mr-2" /> Tenant Protection</h4>
+              <p className="text-[11px] text-indigo-700 leading-relaxed font-medium">Your application is protected by SG PassRent AI. We ensure your data is only shared with verified landlords.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ApplyPage({ listing, onBack }) {
+  const [form, setForm] = useState({ 
+    name: '', contactNumber: '', nationality: '', gender: '', passType: '', 
+    paxCount: '1', duration: listing.rentalType, moveIn: '', 
+    socialConsent: false, ruleAgreed: false 
+  });
+  const [step, setStep] = useState('form');
+  const [aiResult, setAiResult] = useState(null);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    setStep('evaluating');
+    
+    setTimeout(() => {
+      let isEligible = true;
+      let reason = "";
+      
+      if (listing.genderPref !== 'Mixed' && form.gender !== (listing.genderPref.includes('Female') ? 'Female' : 'Male')) {
+        isEligible = false;
+        reason = `Landlord preference mismatch: This unit is strictly for ${listing.genderPref} occupants.`;
+      }
+      else if (parseInt(form.paxCount) > listing.pax) {
+        isEligible = false;
+        reason = `Occupancy limit error: Maximum of ${listing.pax} person(s) allowed for this room type.`;
+      }
+      else if (listing.preferredPass[0] !== 'Any' && !listing.preferredPass.includes(form.passType) && form.nationality === 'Foreigner') {
+        isEligible = false;
+        reason = `Selection Criteria: Landlord currently prioritizes ${listing.preferredPass.join('/')} holders for this unit's tenure.`;
+      }
+
+      setAiResult({ isEligible, reason });
+      setStep('result');
+    }, 2800);
+  };
+
+  if (step === 'evaluating') return (
+    <div className="max-w-md mx-auto py-40 text-center px-4">
+      <div className="relative inline-block mb-8">
+        <Loader2 className="w-20 h-20 text-indigo-600 animate-spin" />
+        <ShieldCheck className="w-8 h-8 text-emerald-500 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+      </div>
+      <h2 className="text-2xl font-black mb-2">AI Smart Screening...</h2>
+      <p className="text-slate-400 font-medium text-sm">Evaluating profile match, occupancy limits, and rental history.</p>
+    </div>
+  );
+
+  if (step === 'result') return (
+    <div className="max-w-2xl mx-auto py-20 px-4">
+      {aiResult.isEligible ? (
+        <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-2xl text-center">
+          <div className="w-24 h-24 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-8">
+            <CheckCircle className="w-14 h-14" />
+          </div>
+          <h2 className="text-3xl font-black mb-4">Application Approved</h2>
+          <p className="text-slate-500 mb-8 font-medium">Your profile is a 100% match for {listing.landlord}'s requirements. We've generated a draft Digital Lease for your review.</p>
+          
+          <div className="bg-slate-50 p-8 rounded-3xl mb-8 text-left border border-slate-200 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-4 bg-indigo-600 text-white text-[9px] font-black uppercase tracking-widest rounded-bl-xl">Draft Lease</div>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-4">Agreement Preview</h4>
+            <div className="space-y-3 text-xs font-medium text-slate-600 leading-relaxed">
+                <p>"This agreement is entered into between **{listing.landlord}** (Landlord) and **{form.name}** (Tenant)..."</p>
+                <p>"Subject: Rental of **{listing.title}** near {listing.mrt} for a period of **{form.duration}**..."</p>
+                <p>"Monthly Rent: **${listing.price}** | Security Deposit: **${listing.price}**..."</p>
+                <p>"The Tenant agrees to strictly follow all house rules including Air-con limits and guest policies."</p>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button className="flex-1 bg-indigo-600 text-white font-black py-5 rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition">Proceed to Digital Signature</button>
+            <button onClick={onBack} className="px-8 py-5 font-black text-slate-400 hover:text-slate-900 transition text-sm">Close</button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-2xl text-center">
+          <div className="w-24 h-24 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-8">
+            <XCircle className="w-14 h-14" />
+          </div>
+          <h2 className="text-3xl font-black mb-4">Application Unsuccessful</h2>
+          <div className="bg-red-50 text-red-800 p-6 rounded-2xl mb-10 border border-red-100">
+            <p className="text-[10px] font-black uppercase tracking-widest mb-2 opacity-50">Reason for Rejection</p>
+            <p className="font-bold text-sm">{aiResult.reason}</p>
+          </div>
+          <button onClick={onBack} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-slate-200 hover:bg-black transition">Browse Similar Units</button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="max-w-2xl mx-auto px-4 py-12">
+      <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-2xl overflow-hidden">
+        <div className="bg-indigo-600 p-10 text-white relative">
+          <h2 className="text-3xl font-black mb-1">Rental Application</h2>
+          <p className="text-indigo-100 text-sm font-medium opacity-80">{listing.title}</p>
+          <div className="absolute top-10 right-10 opacity-20"><ShieldCheck className="w-20 h-20" /></div>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-10 space-y-8">
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input label="Full Name (As per NRIC/Passport)" type="text" placeholder="Enter name" required onChange={v => setForm({...form, name: v})} />
+              <Input label="Contact Number" type="tel" placeholder="+65 XXXX XXXX" required onChange={v => setForm({...form, contactNumber: v})} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input label="Nationality" type="select" options={["Singaporean", "PR", "Foreigner"]} required onChange={v => setForm({...form, nationality: v})} />
+              <Input label="Gender" type="select" options={["Male", "Female"]} required onChange={v => setForm({...form, gender: v})} />
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input label="Pass Type" type="select" options={["None / Citizen / PR", "Employment Pass", "S Pass", "Student Pass", "Work Permit", "Dependent Pass"]} required onChange={v => setForm({...form, passType: v})} />
+              <Input label="Occupancy" type="select" options={["1 pax", "2 pax"]} required onChange={v => setForm({...form, paxCount: v})} />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Input label="Term" type="select" options={["Short-term", "Long-term"]} value={form.duration} onChange={v => setForm({...form, duration: v})} />
+              <Input label="Move-in" type="date" required onChange={v => setForm({...form, moveIn: v})} />
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-8 border-t border-slate-100">
+            <div className={`flex items-start gap-4 p-5 rounded-2xl border transition-all ${form.socialConsent ? 'bg-indigo-50 border-indigo-200 shadow-inner' : 'bg-slate-50 border-slate-100'}`}>
+              <div className="flex h-6 items-center">
+                <input type="checkbox" className="w-5 h-5 rounded cursor-pointer accent-indigo-600" onChange={e => setForm({...form, socialConsent: e.target.checked})} />
+              </div>
+              <div>
+                <p className="text-xs font-black text-slate-800 uppercase tracking-wider mb-1 flex items-center">
+                    Optional Social Verification <span className="ml-2 bg-indigo-600 text-white text-[8px] px-1.5 py-0.5 rounded uppercase">AI Enhanced</span>
+                </p>
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+                    Allow our AI to strictly verify your identity via LinkedIn or public professional profiles. 
+                    This helps landlords prioritize your application by confirming your status. Data is encrypted and deleted post-verification.
+                </p>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-4 cursor-pointer group p-2">
+              <input type="checkbox" required className="w-5 h-5 rounded cursor-pointer accent-indigo-600" onChange={e => setForm({...form, ruleAgreed: e.target.checked})} />
+              <span className="text-[11px] font-bold text-slate-500 group-hover:text-indigo-600 transition">
+                I agree to the House Rules, the 1-month deposit policy, and the required notice period.
+              </span>
+            </label>
+          </div>
+
+          <button className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-black text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition active:scale-95 flex items-center justify-center gap-3">
+             Secure Application <Loader2 className="w-5 h-5 opacity-0 group-active:opacity-100 animate-spin" />
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// --- ATOMIC UI COMPONENTS ---
+function FilterSelect({ label, options, onChange, value }) {
+  return (
+    <select className="bg-slate-50 border border-slate-100 rounded-xl px-2 py-2 text-[10px] font-black uppercase tracking-wider outline-none cursor-pointer hover:bg-slate-100 transition w-full" onChange={(e) => onChange(e.target.value)} value={value}>
+      <option value="">{label}</option>
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  );
+}
+
+function Tag({ icon: Icon, label }) {
+  return (
+    <div className="flex items-center text-[9px] font-black text-slate-500 bg-slate-100/50 px-2.5 py-1.5 rounded-lg border border-slate-200/50 uppercase tracking-wider">
+      <Icon className="w-3 h-3 mr-1.5 text-indigo-400" /> {label}
+    </div>
+  );
+}
+
+function Spec({ icon: Icon, label, val }) {
+  return (
+    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100 text-center">
+      <Icon className="w-5 h-5 mx-auto mb-1.5 text-indigo-500" />
+      <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest leading-none mb-1">{label}</div>
+      <div className="text-xs font-black text-slate-800">{val}</div>
+    </div>
+  );
+}
+
+function RuleItem({ icon: Icon, label, val }) {
+  return (
+    <div className="flex gap-4 items-start">
+      <div className="bg-indigo-50 p-3 rounded-2xl text-indigo-600 border border-indigo-100"><Icon className="w-5 h-5" /></div>
+      <div>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.15em] mb-1">{label}</p>
+        <p className="text-sm font-bold text-slate-700">{val}</p>
+      </div>
+    </div>
+  );
+}
+
+function Input({ label, type, options, onChange, ...props }) {
+  return (
+    <div>
+      <label className="text-[10px] font-black text-slate-400 uppercase mb-2 block tracking-[0.2em] leading-none">{label}</label>
+      {type === 'select' ? (
+        <select className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl font-bold text-sm outline-none focus:ring-4 ring-indigo-50 transition cursor-pointer appearance-none" onChange={e => onChange(e.target.value)} {...props}>
+          <option value="">Select option</option>
+          {options.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
+      ) : (
+        <input type={type} className="w-full bg-slate-50 border border-slate-100 p-4 rounded-2xl font-bold text-sm outline-none focus:ring-4 ring-indigo-50 transition" onChange={e => onChange(e.target.value)} {...props} />
+      )}
+    </div>
+  );
+}
